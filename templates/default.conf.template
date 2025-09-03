@@ -1,0 +1,151 @@
+# templates/default.conf.template
+# Generic nginx proxy configuration with environment variable support
+
+upstream matrix_synapse {
+    server ${SYNAPSE_HOST}:${SYNAPSE_PORT};
+}
+
+upstream element_web {
+    server ${ELEMENT_WEB_HOST}:${ELEMENT_WEB_PORT};
+}
+
+upstream matrix_auth {
+    server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
+}
+
+upstream element_call {
+    server ${ELEMENT_CALL_HOST}:${ELEMENT_CALL_PORT};
+}
+
+upstream livekit_server {
+    server ${LIVEKIT_HOST}:${LIVEKIT_PORT};
+}
+
+upstream lk_jwt_service {
+    server ${LK_JWT_HOST}:${LK_JWT_PORT};
+}
+
+# Health check server
+server {
+    listen 80;
+    server_name _;
+    
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+}
+
+# Main Matrix server
+server {
+    listen 80;
+    server_name ${MATRIX_DOMAIN};
+
+    client_max_body_size ${CLIENT_MAX_BODY_SIZE:-50M};
+
+    # Matrix server endpoints
+    location /.well-known/matrix/ {
+        proxy_pass http://matrix_synapse;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /_matrix/ {
+        proxy_pass http://matrix_synapse;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support for sync
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location /_synapse/client {
+        proxy_pass http://matrix_synapse;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Element Web client (everything else)
+    location / {
+        proxy_pass http://element_web;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# Matrix Authentication Service
+server {
+    listen 80;
+    server_name ${AUTH_DOMAIN};
+
+    location / {
+        proxy_pass http://matrix_auth;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# Element Call
+server {
+    listen 80;
+    server_name ${CALL_DOMAIN};
+
+    location / {
+        proxy_pass http://element_call;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# LiveKit and MatrixRTC services
+server {
+    listen 80;
+    server_name ${LIVEKIT_DOMAIN};
+
+    # MatrixRTC Authorization Service
+    location /livekit/jwt {
+        proxy_pass http://lk_jwt_service;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # LiveKit server
+    location / {
+        proxy_pass http://livekit_server;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support for LiveKit
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # LiveKit specific headers
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_buffering off;
+    }
+}
