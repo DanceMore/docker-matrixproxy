@@ -42,8 +42,6 @@ server {
     listen 80;
     server_name ${MATRIX_DOMAIN};
 
-    client_max_body_size ${CLIENT_MAX_BODY_SIZE:-50M};
-
     # Matrix server endpoints
     location /.well-known/matrix/ {
         proxy_pass http://matrix_synapse;
