@@ -9,9 +9,10 @@ upstream element_web {
     server ${ELEMENT_WEB_HOST}:${ELEMENT_WEB_PORT};
 }
 
-upstream matrix_auth {
-    server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
-}
+# Disabled for now - uncomment when ready to use MAS
+# upstream matrix_auth {
+#     server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
+# }
 
 upstream element_call {
     server ${ELEMENT_CALL_HOST}:${ELEMENT_CALL_PORT};
@@ -48,7 +49,8 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
     }
 
     location /_matrix/ {
@@ -56,12 +58,17 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
         
         # WebSocket support for sync
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+        
+        # Increase timeouts for long-polling
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 
     location /_synapse/client {
@@ -69,7 +76,8 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
     }
 
     # Element Web client (everything else)
@@ -78,7 +86,8 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
 
         # Handle large static files without buffering warnings
         proxy_buffering on;
@@ -88,24 +97,26 @@ server {
     }
 }
 
-# Matrix Authentication Service
-server {
-    listen 80;
-    server_name ${AUTH_DOMAIN};
-
-    location / {
-        proxy_pass http://matrix_auth;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # WebSocket support
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
+# Matrix Authentication Service - DISABLED FOR NOW
+# Uncomment this when ready to migrate to MAS
+# server {
+#     listen 80;
+#     server_name ${AUTH_DOMAIN};
+# 
+#     location / {
+#         proxy_pass http://matrix_auth;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto https;
+#         proxy_set_header X-Forwarded-Host $host;
+#         
+#         # WebSocket support
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
+#     }
+# }
 
 # Element Call
 server {
@@ -117,7 +128,8 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
     }
 }
 
@@ -132,7 +144,8 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
     }
 
     # LiveKit server
@@ -141,15 +154,17 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
         
         # WebSocket support for LiveKit
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         
-        # LiveKit specific headers
-        proxy_set_header X-Forwarded-Host $host;
+        # LiveKit specific settings
         proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 }
