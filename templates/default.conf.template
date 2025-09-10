@@ -197,10 +197,10 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
 
-        # CORS headers (apply always, even on errors/preflight)
-        add_header Access-Control-Allow-Origin * always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always;
+        ## CORS headers (apply always, even on errors/preflight)
+        #add_header Access-Control-Allow-Origin * always;
+        #add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+        #add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always;
 
         # Handle preflight
         if ($request_method = OPTIONS) {
