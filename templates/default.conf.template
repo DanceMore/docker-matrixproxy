@@ -67,7 +67,7 @@ server {
           "org.matrix.msc4143.rtc_foci": [
             {
               "type": "livekit",
-              "livekit_service_url": "https://livekit.dancemore.xyz/livekit/jwt"
+              "livekit_service_url": "https://livekit.chat.dancemore.xyz/livekit/jwt"
             }
           ]
         }';
