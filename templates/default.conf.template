@@ -2,27 +2,33 @@
 # Generic nginx proxy configuration with environment variable support
 
 upstream matrix_synapse {
-    server ${SYNAPSE_HOST}:${SYNAPSE_PORT};
+    server ${SYNAPSE_HOST}:${SYNAPSE_PORT} max_fails=3 fail_timeout=30s;
+    keepalive 32;
 }
 
 upstream element_web {
-    server ${ELEMENT_WEB_HOST}:${ELEMENT_WEB_PORT};
+    server ${ELEMENT_WEB_HOST}:${ELEMENT_WEB_PORT} max_fails=3 fail_timeout=30s;
+    keepalive 8;
 }
 
 upstream matrix_auth {
-    server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
+    server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT} max_fails=3 fail_timeout=30s;
+    keepalive 8;
 }
 
 upstream element_call {
-    server ${ELEMENT_CALL_HOST}:${ELEMENT_CALL_PORT};
+    server ${ELEMENT_CALL_HOST}:${ELEMENT_CALL_PORT} max_fails=3 fail_timeout=30s;
+    keepalive 8;
 }
 
 upstream livekit_server {
-    server ${LIVEKIT_HOST}:${LIVEKIT_PORT};
+    server ${LIVEKIT_HOST}:${LIVEKIT_PORT} max_fails=3 fail_timeout=30s;
+    keepalive 32;
 }
 
 upstream lk_jwt_service {
-    server ${LK_JWT_HOST}:${LK_JWT_PORT};
+    server ${LK_JWT_HOST}:${LK_JWT_PORT} max_fails=3 fail_timeout=30s;
+    keepalive 8;
 }
 
 # Health check server
