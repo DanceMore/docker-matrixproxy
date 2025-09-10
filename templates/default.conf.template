@@ -50,9 +50,6 @@ server {
           "m.homeserver": {
             "base_url": "https://chat.dancemore.xyz/"
           },
-          {
-            "m.server": "chat.dancemore.xyz:443"
-          },
           "im.vector.riot.jitsi": {
             "preferredDomain": ""
           },
