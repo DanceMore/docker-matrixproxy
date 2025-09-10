@@ -52,6 +52,18 @@ server {
         proxy_set_header X-Forwarded-Host $host;
     }
 
+    # MAS compatibility layer - these endpoints go to MAS, not Synapse
+    location ~ ^/_matrix/client/(.*)/(login|logout|refresh) {
+        proxy_pass http://matrix_auth;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_http_version 1.1;
+    }
+
+    # All other Matrix endpoints go to Synapse
     location /_matrix/ {
         proxy_pass http://matrix_synapse;
         proxy_set_header Host $host;
