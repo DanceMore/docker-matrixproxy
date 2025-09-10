@@ -52,6 +52,27 @@ server {
         proxy_set_header X-Forwarded-Host $host;
     }
 
+    # Matrix server endpoints - well-known with RTC support
+    location /.well-known/matrix/client {
+        add_header Content-Type application/json;
+        add_header Access-Control-Allow-Origin *;
+        return 200 '{
+          "m.homeserver": {
+            "base_url": "https://chat.dancemore.xyz/"
+          },
+          "org.matrix.msc2965.authentication": {
+            "issuer": "https://auth.chat.dancemore.xyz/",
+            "account": "https://auth.chat.dancemore.xyz/account/"
+          },
+          "org.matrix.msc4143.rtc_foci": [
+            {
+              "type": "livekit",
+              "livekit_service_url": "https://livekit.dancemore.xyz/livekit/jwt"
+            }
+          ]
+        }';
+    }
+
     # MAS compatibility layer - these endpoints go to MAS, not Synapse
     location ~ ^/_matrix/client/(.*)/(login|logout|refresh) {
         proxy_pass http://matrix_auth;
