@@ -185,23 +185,81 @@ server {
     listen 80;
     server_name ${LIVEKIT_DOMAIN};
 
-    # MatrixRTC Authorization Service
-    location /livekit/jwt {
-        proxy_pass http://lk_jwt_service;
+    # MatrixRTC Authorization Service - specific endpoints
+    location /livekit/jwt/sfu/get {
+        proxy_pass http://lk_jwt_service/sfu/get;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # CORS headers for browser requests
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+        add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With";
+        
+        # Handle preflight requests
+        if ($request_method = 'OPTIONS') {
+            return 204;
+        }
+    }
+    
+    location /livekit/jwt/healthz {
+        proxy_pass http://lk_jwt_service/healthz;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
     }
 
-    # LiveKit server
+    # General JWT service fallback
+    location /livekit/jwt/ {
+        proxy_pass http://lk_jwt_service/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # CORS headers
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+        add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With";
+        
+        if ($request_method = 'OPTIONS') {
+            return 204;
+        }
+    }
+
+    # LiveKit SFU WebSocket connection
+    location /livekit/sfu/ {
+        proxy_pass http://livekit_server/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # WebSocket support for LiveKit
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # LiveKit specific settings
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # LiveKit server (everything else)
     location / {
         proxy_pass http://livekit_server;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
         
         # WebSocket support for LiveKit
