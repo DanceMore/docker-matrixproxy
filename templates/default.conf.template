@@ -45,7 +45,7 @@ server {
     # Matrix server endpoints - well-known with RTC support
     location /.well-known/matrix/client {
         add_header Content-Type application/json;
-        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Origin * always;
         return 200 '{
           "m.homeserver": {
             "base_url": "https://chat.dancemore.xyz/"
@@ -73,6 +73,8 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
         proxy_set_header X-Forwarded-Host $host;
+        add_header Content-Type application/json;
+        add_header Access-Control-Allow-Origin * always;
         return 200 '{"m.server": "chat.dancemore.xyz:443"}';
     }
 
@@ -133,19 +135,6 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
         proxy_set_header X-Forwarded-Host $host;
-
-        # Add this to locations where browser calls happen
-        add_header 'Access-Control-Allow-Origin' '*' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept, Authorization, X-Requested-With' always;
-
-        # Handle preflight OPTIONS requests cleanly
-        if ($request_method = OPTIONS) {
-            add_header 'Access-Control-Allow-Origin' '*' always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept, Authorization, X-Requested-With' always;
-            return 204;
-        }
 
         # Handle large static files without buffering warnings
         proxy_buffering on;
@@ -209,7 +198,7 @@ server {
         proxy_set_header X-Forwarded-Host $host;
         
         # CORS headers for browser requests
-        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
         add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With";
         
