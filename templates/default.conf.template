@@ -172,13 +172,15 @@ server {
     server_name ${LIVEKIT_DOMAIN};
 
     # MatrixRTC Authorization Service
-    location /livekit/jwt {
-        proxy_pass http://lk_jwt_service;
+    location ^~ /livekit/jwt/ {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
         proxy_set_header X-Forwarded-Host $host;
+
+        # MatrixRTC Authorization Service running at port 8080
+        proxy_pass http://lk_jwt_service;
     }
 
     # LiveKit server
