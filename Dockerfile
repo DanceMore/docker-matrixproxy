@@ -8,8 +8,9 @@ RUN apk add --no-cache gettext
 COPY templates/ /etc/nginx/templates/
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/health || exit 1
+HEALTHCHECK --interval=5s --timeout=2s --start-period=2s --retries=2 \
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1
+
 
 EXPOSE 80
 
