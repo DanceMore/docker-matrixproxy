@@ -9,10 +9,9 @@ upstream element_web {
     server ${ELEMENT_WEB_HOST}:${ELEMENT_WEB_PORT};
 }
 
-# Disabled for now - uncomment when ready to use MAS
-# upstream matrix_auth {
-#     server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
-# }
+upstream matrix_auth {
+    server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
+}
 
 upstream element_call {
     server ${ELEMENT_CALL_HOST}:${ELEMENT_CALL_PORT};
@@ -97,26 +96,24 @@ server {
     }
 }
 
-# Matrix Authentication Service - DISABLED FOR NOW
-# Uncomment this when ready to migrate to MAS
-# server {
-#     listen 80;
-#     server_name ${AUTH_DOMAIN};
-# 
-#     location / {
-#         proxy_pass http://matrix_auth;
-#         proxy_set_header Host $host;
-#         proxy_set_header X-Real-IP $remote_addr;
-#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-#         proxy_set_header X-Forwarded-Proto https;
-#         proxy_set_header X-Forwarded-Host $host;
-#         
-#         # WebSocket support
-#         proxy_http_version 1.1;
-#         proxy_set_header Upgrade $http_upgrade;
-#         proxy_set_header Connection "upgrade";
-#     }
-# }
+server {
+    listen 80;
+    server_name ${AUTH_DOMAIN};
+
+    location / {
+        proxy_pass http://matrix_auth;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+
+        # WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
 
 # Element Call
 server {
