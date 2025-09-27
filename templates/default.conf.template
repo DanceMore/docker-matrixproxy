@@ -63,9 +63,6 @@ server {
           "m.homeserver": {
             "base_url": "https://chat.dancemore.xyz/"
           },
-          "im.vector.riot.jitsi": {
-            "preferredDomain": ""
-          },
           "org.matrix.msc2965.authentication": {
             "issuer": "https://auth.chat.dancemore.xyz/",
             "account": "https://auth.chat.dancemore.xyz/account/"
