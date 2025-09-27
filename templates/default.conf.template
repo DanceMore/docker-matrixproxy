@@ -70,11 +70,9 @@ server {
             "issuer": "https://auth.chat.dancemore.xyz/",
             "account": "https://auth.chat.dancemore.xyz/account/"
           },
-          {
-            "element_call": {
-              "use_exclusively": true,
-              "participant_limit": 16,
-            }
+          "element_call": {
+            "use_exclusively": true,
+            "participant_limit": 16
           },
           "org.matrix.msc4143.rtc_foci": [
             {
