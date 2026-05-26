@@ -1,46 +1,21 @@
 # templates/default.conf.template
 # Generic nginx proxy configuration with environment variable support
+#
+# Docker-aware: upstream hostnames are resolved at request time via the
+# embedded Docker DNS (127.0.0.11). This lets nginx pick up new container
+# IPs after a docker-compose service is recreated, without restarting the
+# proxy. Tradeoff: we cannot use named upstream{} blocks (which would
+# resolve once at config load and cache forever), so connection keepalive
+# to backends is disabled. On a docker bridge network this is negligible.
 
-upstream matrix_synapse {
-    server ${SYNAPSE_HOST}:${SYNAPSE_PORT} max_fails=3 fail_timeout=30s;
-    keepalive 32;
-}
-
-upstream element_web {
-    server ${ELEMENT_WEB_HOST}:${ELEMENT_WEB_PORT} max_fails=3 fail_timeout=30s;
-    keepalive 8;
-}
-
-upstream matrix_auth {
-    server ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT} max_fails=3 fail_timeout=30s;
-    keepalive 8;
-}
-
-upstream element_call {
-    server ${ELEMENT_CALL_HOST}:${ELEMENT_CALL_PORT} max_fails=3 fail_timeout=30s;
-    keepalive 8;
-}
-
-upstream livekit_server {
-    server ${LIVEKIT_HOST}:${LIVEKIT_PORT} max_fails=3 fail_timeout=30s;
-    keepalive 32;
-}
-
-upstream lk_jwt_service {
-    server ${LK_JWT_HOST}:${LK_JWT_PORT} max_fails=3 fail_timeout=30s;
-    keepalive 8;
-}
-
-upstream mautrix_discord {
-    server ${MAUTRIX_DISCORD_HOST}:${MAUTRIX_DISCORD_PORT} max_fails=3 fail_timeout=30s;
-    keepalive 8;
-}
+resolver 127.0.0.11 valid=10s ipv6=off;
+resolver_timeout 5s;
 
 # Health check server
 server {
     listen 80;
     server_name _;
-    
+
     location /health {
         access_log off;
         return 200 "healthy\n";
@@ -55,7 +30,7 @@ server {
 
     # Set maximum file upload size for Matrix media uploads
     client_max_body_size 50M;
-    
+
     # Increase timeouts for large file uploads
     client_body_timeout 300s;
     client_header_timeout 60s;
@@ -86,12 +61,6 @@ server {
     }
 
     location /.well-known/matrix/server {
-        #proxy_pass http://matrix_synapse;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
-        proxy_set_header X-Forwarded-Host $host;
         add_header Content-Type application/json;
         add_header Access-Control-Allow-Origin * always;
         return 200 '{"m.server": "chat.dancemore.xyz:443"}';
@@ -99,33 +68,37 @@ server {
 
     # MAS compatibility layer - these endpoints go to MAS, not Synapse
     location ~ ^/_matrix/client/(.*)/(login|logout|refresh) {
-        proxy_pass http://matrix_auth;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_http_version 1.1;
-    }
-
-    # Matrix media upload endpoints - needs special handling for large files
-    location /_matrix/media/ {
-        proxy_pass http://matrix_synapse;
+        set $upstream_auth ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
+        proxy_pass http://$upstream_auth;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-        
+        proxy_http_version 1.1;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+    }
+
+    # Matrix media upload endpoints - needs special handling for large files
+    location /_matrix/media/ {
+        set $upstream_synapse ${SYNAPSE_HOST}:${SYNAPSE_PORT};
+        proxy_pass http://$upstream_synapse;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+
         # Extended timeouts for large file uploads
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
         proxy_connect_timeout 60s;
-        
+
         # Allow streaming uploads without buffering
         proxy_request_buffering off;
         proxy_buffering off;
-        
+
         # Increase buffer sizes for large uploads
         proxy_buffer_size 128k;
         proxy_buffers 4 256k;
@@ -134,22 +107,24 @@ server {
 
     # Discord bridge avatar endpoint
     location /mautrix-discord/avatar/ {
-        proxy_pass http://mautrix_discord;
+        set $upstream_discord ${MAUTRIX_DISCORD_HOST}:${MAUTRIX_DISCORD_PORT};
+        proxy_pass http://$upstream_discord;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-        
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+
         # Cache avatars for better performance
         proxy_cache_valid 200 1h;
         proxy_cache_valid 404 5m;
-        
+
         # CORS headers for Discord access
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
         add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
-        
+
         if ($request_method = OPTIONS) {
             return 204;
         }
@@ -157,50 +132,58 @@ server {
 
     # All other Matrix endpoints go to Synapse
     location /_matrix/ {
-        proxy_pass http://matrix_synapse;
+        set $upstream_synapse ${SYNAPSE_HOST}:${SYNAPSE_PORT};
+        proxy_pass http://$upstream_synapse;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-        
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+
         # WebSocket support for sync
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # Increase timeouts for long-polling
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
     }
 
     location /_synapse/client {
-        proxy_pass http://matrix_synapse;
+        set $upstream_synapse ${SYNAPSE_HOST}:${SYNAPSE_PORT};
+        proxy_pass http://$upstream_synapse;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
     }
 
     # MAS-specific Synapse endpoints
     location /_synapse/mas/ {
-        proxy_pass http://matrix_synapse;
+        set $upstream_synapse ${SYNAPSE_HOST}:${SYNAPSE_PORT};
+        proxy_pass http://$upstream_synapse;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
     }
 
     # Element Web client (everything else)
     location / {
-        proxy_pass http://element_web;
+        set $upstream_element ${ELEMENT_WEB_HOST}:${ELEMENT_WEB_PORT};
+        proxy_pass http://$upstream_element;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
 
         # Handle large static files without buffering warnings
         proxy_buffering on;
@@ -216,18 +199,20 @@ server {
     server_name ${AUTH_DOMAIN};
 
     location / {
-        proxy_pass http://matrix_auth;
+        set $upstream_auth ${MATRIX_AUTH_HOST}:${MATRIX_AUTH_PORT};
+        proxy_pass http://$upstream_auth;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-        
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+
         # WebSocket support
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # Increase timeouts for auth flows
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
@@ -240,12 +225,14 @@ server {
     server_name ${CALL_DOMAIN};
 
     location / {
-        proxy_pass http://element_call;
+        set $upstream_call ${ELEMENT_CALL_HOST}:${ELEMENT_CALL_PORT};
+        proxy_pass http://$upstream_call;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;  # Force HTTPS
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
     }
 }
 
@@ -256,17 +243,14 @@ server {
 
     # MatrixRTC Authorization Service - specific endpoints
     location /livekit/jwt/sfu/get {
-        proxy_pass http://lk_jwt_service/sfu/get;
+        set $upstream_lkjwt ${LK_JWT_HOST}:${LK_JWT_PORT};
+        proxy_pass http://$upstream_lkjwt/sfu/get;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-
-        ## CORS headers (apply always, even on errors/preflight)
-        #add_header Access-Control-Allow-Origin * always;
-        #add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        #add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
 
         # Handle preflight
         if ($request_method = OPTIONS) {
@@ -276,30 +260,34 @@ server {
             return 204;
         }
     }
-    
+
     location /livekit/jwt/healthz {
-        proxy_pass http://lk_jwt_service/healthz;
+        set $upstream_lkjwt ${LK_JWT_HOST}:${LK_JWT_PORT};
+        proxy_pass http://$upstream_lkjwt/healthz;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
     }
 
     # General JWT service fallback
     location /livekit/jwt/ {
-        proxy_pass http://lk_jwt_service/;
+        set $upstream_lkjwt ${LK_JWT_HOST}:${LK_JWT_PORT};
+        proxy_pass http://$upstream_lkjwt/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-        
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+
         # CORS headers
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
         add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With";
-        
+
         if ($request_method = 'OPTIONS') {
             return 204;
         }
@@ -307,18 +295,20 @@ server {
 
     # LiveKit SFU WebSocket connection
     location /livekit/sfu/ {
-        proxy_pass http://livekit_server/;
+        set $upstream_livekit ${LIVEKIT_HOST}:${LIVEKIT_PORT};
+        proxy_pass http://$upstream_livekit/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-        
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+
         # WebSocket support for LiveKit
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # LiveKit specific settings
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -327,18 +317,20 @@ server {
 
     # LiveKit server (everything else)
     location / {
-        proxy_pass http://livekit_server;
+        set $upstream_livekit ${LIVEKIT_HOST}:${LIVEKIT_PORT};
+        proxy_pass http://$upstream_livekit;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-        
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+
         # WebSocket support for LiveKit
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # LiveKit specific settings
         proxy_buffering off;
         proxy_read_timeout 300s;
