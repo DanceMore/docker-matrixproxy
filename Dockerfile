@@ -1,5 +1,5 @@
 # Generic nginx proxy with envsubst templating support
-FROM nginx:alpine
+FROM nginx:1.31.9-alpine
 
 # Install gettext for envsubst (if not already present)
 RUN apk add --no-cache gettext
